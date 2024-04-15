@@ -1,5 +1,6 @@
 import java.io.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class Main {
     public static void main(String[] args) {
@@ -23,25 +24,37 @@ public class Main {
                 .filter(a -> a.getZi() <= 15 && a.getCantitate() > 100)
                 .forEach(System.out::println);
 
-        HashMap<String, List<Achizitie>> map = new HashMap<>();
-        for (Achizitie achizitie : achizitii) {
-            map.computeIfAbsent(achizitie.getCod(), k -> new ArrayList<>()).add(achizitie);
-        }
+        // Agregarea datelor pe produse folosind Collectors
+        Map<String, Double> produsValoareTotala = achizitii.stream()
+                .collect(Collectors.groupingBy(
+                        Achizitie::getCod,
+                        Collectors.summingDouble(Achizitie::valoare)
+                ));
 
-        map.entrySet().stream()
-                .sorted(Map.Entry.<String, List<Achizitie>>comparingByValue(
-                        Comparator.comparingDouble(list -> -list.stream().mapToDouble(Achizitie::valoare).sum())))
-                .forEach(entry -> {
-                    double totalValue = entry.getValue().stream().mapToDouble(Achizitie::valoare).sum();
-                    System.out.println("Produs " + entry.getKey() + " -> " + entry.getValue().size() +
-                            " achiziții, valoare totală " + totalValue + " Lei");
-                });
+        List<Map.Entry<String, Double>> sortedEntries = new ArrayList<>(produsValoareTotala.entrySet());
+        sortedEntries.sort(Map.Entry.<String, Double>comparingByValue().reversed());
+
+
+        // Afișare sortată
+        sortedEntries.forEach(entry -> {
+            long numAchizitii = achizitii.stream().filter(a -> a.getCod().equals(entry.getKey())).count();
+            System.out.println("Produs " + entry.getKey() + " -> " + numAchizitii +
+                    " achiziții, valoare totală " + entry.getValue() + " Lei");
+        });
+
+        // Serializarea produselor frecvente folosind un nou map cu numărul de achiziții
+        Map<String, Long> produsNumarAchizitii = achizitii.stream()
+                .collect(Collectors.groupingBy(
+                        Achizitie::getCod,
+                        Collectors.counting()
+                ));
+
         try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("produseFrecvente.dat"))) {
-            for (Map.Entry<String, List<Achizitie>> entry : map.entrySet()) {
-                if (entry.getValue().size() > 3) {
+            for (Map.Entry<String, Long> entry : produsNumarAchizitii.entrySet()) {
+                if (entry.getValue() > 3) {
                     oos.writeObject(entry.getKey());
-                    oos.writeInt(entry.getValue().size());
-                    oos.writeDouble(entry.getValue().stream().mapToDouble(Achizitie::valoare).sum());
+                    oos.writeInt(entry.getValue().intValue());
+                    oos.writeDouble(produsValoareTotala.get(entry.getKey()));
                 }
             }
         } catch (IOException e) {
